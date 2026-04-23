@@ -3,9 +3,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "login:codex-proxy": "node codex-oauth-login.mjs",
-    "start:codex-proxy": "node codex-openai-proxy.mjs",
-    "test:litellm": "node verify_litellm_proxy.mjs"
+    "login:codex-proxy": "bun run bin/codex-proxy/login.js",
+    "start:codex-proxy": "bun run bin/codex-proxy/index.js",
+    "test:litellm": "node test/verify_litellm_proxy.mjs"
   },
   "dependencies": {
     "openai": "^6.1.0"

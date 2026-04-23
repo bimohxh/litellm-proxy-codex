@@ -27,11 +27,13 @@ async function openBrowser(url) {
   }
 }
 
-async function sleep(ms) {
+function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function main() {
+  // 这个脚本只负责驱动浏览器登录，不直接接触 token 交换细节；
+  // 真正的 OAuth 状态保存在本地代理服务里。
   const startResponse = await fetch(`${baseURL}/auth/device/start`, {
     method: "POST",
   });
@@ -55,7 +57,8 @@ async function main() {
   console.log("After you finish ChatGPT login in the browser, this script will continue automatically.");
 
   const intervalMs = Math.max(3, Number(startData.interval ?? 5)) * 1000;
-  const deadline = Date.now() + Math.max(60, Number(startData.expires_in ?? 900)) * 1000;
+  const deadline =
+    Date.now() + Math.max(60, Number(startData.expires_in ?? 900)) * 1000;
 
   while (Date.now() < deadline) {
     await sleep(intervalMs);
