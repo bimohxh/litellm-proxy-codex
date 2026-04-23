@@ -35,7 +35,8 @@ export async function handleChatCompletions(req, res) {
     const upstreamBody = {
       model: upstreamModel,
       input: normalizedMessages
-        .map((message) => `${message.role}: ${message.content}`)
+        .map((message) => `${message.role}: ${message.text}`)
+        .filter((line) => !line.endsWith(": "))
         .join("\n\n"),
     };
 
@@ -65,7 +66,8 @@ export async function handleChatCompletions(req, res) {
   const upstreamModel = resolveUpstreamModel(body.model);
   const instructions = normalizedMessages
     .filter((message) => message.role === "system")
-    .map((message) => message.content)
+    .map((message) => message.text)
+    .filter(Boolean)
     .join("\n\n");
 
   const upstreamBody = {

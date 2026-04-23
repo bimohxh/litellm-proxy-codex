@@ -23,10 +23,22 @@ export function textContentToString(content) {
         return part.text;
       }
 
+      if (part.type === "refusal" && typeof part.refusal === "string") {
+        return part.refusal;
+      }
+
       return "";
     })
     .filter(Boolean)
     .join("\n");
+}
+
+function hasContentPayload(content) {
+  if (typeof content === "string") {
+    return content.trim().length > 0;
+  }
+
+  return Array.isArray(content) && content.length > 0;
 }
 
 export function normalizeMessages(messages = []) {
@@ -34,22 +46,131 @@ export function normalizeMessages(messages = []) {
     .filter((message) => message && typeof message === "object")
     .map((message) => ({
       role: message.role ?? "user",
-      content: textContentToString(message.content),
+      content: message.content,
+      text: textContentToString(message.content),
     }))
-    .filter((message) => message.content);
+    .filter((message) => hasContentPayload(message.content));
+}
+
+function mapStringContentByRole(role, text) {
+  if (!text) {
+    return [];
+  }
+
+  if (role === "assistant") {
+    return [{ type: "output_text", text }];
+  }
+
+  return [{ type: "input_text", text }];
+}
+
+function mapImagePart(part) {
+  const image = part?.image_url;
+  if (typeof image === "string" && image) {
+    return {
+      type: "input_image",
+      image_url: image,
+      detail: "auto",
+    };
+  }
+
+  if (image && typeof image === "object" && typeof image.url === "string") {
+    return {
+      type: "input_image",
+      image_url: image.url,
+      detail: image.detail ?? "auto",
+    };
+  }
+
+  return null;
+}
+
+function mapFilePart(part) {
+  const file = part?.file;
+  if (!file || typeof file !== "object") {
+    return null;
+  }
+
+  const mapped = {
+    type: "input_file",
+  };
+
+  if (typeof file.file_data === "string" && file.file_data) {
+    mapped.file_data = file.file_data;
+  }
+
+  if (typeof file.file_id === "string" && file.file_id) {
+    mapped.file_id = file.file_id;
+  }
+
+  if (typeof file.file_url === "string" && file.file_url) {
+    mapped.file_url = file.file_url;
+  }
+
+  if (typeof file.filename === "string" && file.filename) {
+    mapped.filename = file.filename;
+  }
+
+  return Object.keys(mapped).length > 1 ? mapped : null;
+}
+
+function mapArrayContentByRole(role, content) {
+  // 目前优先支持最常见的 OpenAI Chat message parts：
+  // text / image_url / file / refusal。
+  // 其它更少见的 part（例如 input_audio）暂未在这个代理里实现。
+  return content
+    .map((part) => {
+      if (!part || typeof part !== "object") {
+        return null;
+      }
+
+      if (part.type === "text" && typeof part.text === "string") {
+        return role === "assistant"
+          ? { type: "output_text", text: part.text }
+          : { type: "input_text", text: part.text };
+      }
+
+      if (part.type === "refusal" && role === "assistant") {
+        if (typeof part.refusal === "string" && part.refusal) {
+          return { type: "refusal", refusal: part.refusal };
+        }
+        return null;
+      }
+
+      if (part.type === "image_url" && role !== "assistant") {
+        return mapImagePart(part);
+      }
+
+      if (part.type === "file" && role !== "assistant") {
+        return mapFilePart(part);
+      }
+
+      return null;
+    })
+    .filter(Boolean);
+}
+
+function mapMessageContentByRole(role, content) {
+  if (typeof content === "string") {
+    return mapStringContentByRole(role, content);
+  }
+
+  if (Array.isArray(content)) {
+    return mapArrayContentByRole(role, content);
+  }
+
+  return [];
 }
 
 export function messagesToResponsesInput(messages = []) {
   // ChatGPT Codex 的 Responses 输入对历史消息类型要求更严格：
   // user 用 input_text，assistant 历史内容必须用 output_text。
-  return normalizeMessages(messages).map((message) => ({
-    role: message.role === "system" ? "user" : message.role,
-    content: [
-      message.role === "assistant"
-        ? { type: "output_text", text: message.content }
-        : { type: "input_text", text: message.content },
-    ],
-  }));
+  return normalizeMessages(messages)
+    .map((message) => ({
+      role: message.role === "system" ? "user" : message.role,
+      content: mapMessageContentByRole(message.role, message.content),
+    }))
+    .filter((message) => message.content.length > 0);
 }
 
 export function usageFromResponse(response) {
