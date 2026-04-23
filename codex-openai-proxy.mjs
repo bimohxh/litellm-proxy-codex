@@ -287,7 +287,11 @@ function normalizeMessages(messages = []) {
 function messagesToResponsesInput(messages = []) {
   return normalizeMessages(messages).map((message) => ({
     role: message.role === "system" ? "user" : message.role,
-    content: [{ type: "input_text", text: message.content }],
+    content: [
+      message.role === "assistant"
+        ? { type: "output_text", text: message.content }
+        : { type: "input_text", text: message.content },
+    ],
   }));
 }
 
