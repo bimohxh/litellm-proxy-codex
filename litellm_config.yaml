@@ -1,0 +1,15 @@
+model_list:
+  - model_name: kimi-k2.5
+    litellm_params:
+      model: openai/kimi-k2.5
+      api_base: https://api.moonshot.cn/v1
+      api_key: os.environ/MOONSHOT_API_KEY
+  - model_name: codex-local
+    litellm_params:
+      model: gpt-5.4
+      api_base: http://host.docker.internal:4200/v1
+      api_key: anything
+
+general_settings:
+  master_key: sk-admin-123
+  database_url: postgresql://litellm_user:litellm_pass_123@postgres:5432/litellm

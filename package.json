@@ -1,0 +1,13 @@
+{
+  "name": "test-litellm",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "login:codex-proxy": "node codex-oauth-login.mjs",
+    "start:codex-proxy": "node codex-openai-proxy.mjs",
+    "test:litellm": "node verify_litellm_proxy.mjs"
+  },
+  "dependencies": {
+    "openai": "^6.1.0"
+  }
+}

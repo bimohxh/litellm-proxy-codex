@@ -1,0 +1,37 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: litellm-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: litellm_user
+      POSTGRES_PASSWORD: litellm_pass_123
+      POSTGRES_DB: litellm
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  litellm:
+    image: ghcr.io/berriai/litellm:main-latest
+    container_name: litellm-proxy
+    restart: always
+    depends_on:
+      - postgres
+    ports:
+      - "4000:4000"
+    environment:
+      MOONSHOT_API_KEY: "sk-EJ8tC0mJYzuzxoa5b3jS9Af2kfxLLCkSuFLN3GY3mbNT5vmv"
+    volumes:
+      - ./litellm_config.yaml:/app/config.yaml:ro
+    command:
+      - "--config"
+      - "/app/config.yaml"
+      - "--port"
+      - "4000"
+      - "--detailed_debug"
+
+volumes:
+  pgdata:
