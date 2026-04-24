@@ -27,6 +27,14 @@ export function textContentToString(content) {
         return part.refusal;
       }
 
+      if (typeof part.input === "string") {
+        return part.input;
+      }
+
+      if (typeof part.content === "string") {
+        return part.content;
+      }
+
       return "";
     })
     .filter(Boolean)
@@ -50,6 +58,35 @@ export function normalizeMessages(messages = []) {
       text: textContentToString(message.content),
     }))
     .filter((message) => hasContentPayload(message.content));
+}
+
+function hasAssistantToolCalls(message) {
+  return (
+    message?.role === "assistant" &&
+    Array.isArray(message.tool_calls) &&
+    message.tool_calls.length > 0
+  );
+}
+
+function stringifyToolOutput(content) {
+  const text = textContentToString(content);
+  if (text) {
+    return text;
+  }
+
+  if (content == null) {
+    return "";
+  }
+
+  if (typeof content === "object") {
+    try {
+      return JSON.stringify(content);
+    } catch {
+      return String(content);
+    }
+  }
+
+  return String(content);
 }
 
 function mapStringContentByRole(role, text) {
@@ -165,12 +202,110 @@ function mapMessageContentByRole(role, content) {
 export function messagesToResponsesInput(messages = []) {
   // ChatGPT Codex 的 Responses 输入对历史消息类型要求更严格：
   // user 用 input_text，assistant 历史内容必须用 output_text。
-  return normalizeMessages(messages)
-    .map((message) => ({
-      role: message.role === "system" ? "user" : message.role,
-      content: mapMessageContentByRole(message.role, message.content),
-    }))
-    .filter((message) => message.content.length > 0);
+  return messages
+    .filter((message) => message && typeof message === "object")
+    .flatMap((message) => {
+      if (message.role === "tool") {
+        const callId = message.tool_call_id ?? message.id;
+        if (!callId) {
+          return [];
+        }
+
+        return [
+          {
+            type: "function_call_output",
+            call_id: callId,
+            output: stringifyToolOutput(message.content),
+          },
+        ];
+      }
+
+      const items = [];
+      const content = mapMessageContentByRole(message.role, message.content);
+      if (content.length > 0) {
+        items.push({
+          role: message.role === "system" ? "user" : message.role,
+          content,
+        });
+      }
+
+      if (hasAssistantToolCalls(message)) {
+        for (const toolCall of message.tool_calls) {
+          if (toolCall?.type && toolCall.type !== "function") {
+            continue;
+          }
+
+          const name = toolCall?.function?.name;
+          if (!name) {
+            continue;
+          }
+
+          items.push({
+            type: "function_call",
+            call_id: toolCall.id,
+            name,
+            arguments: toolCall.function?.arguments ?? "",
+          });
+        }
+      }
+
+      return items;
+    });
+}
+
+export function chatToolsToResponsesTools(tools = []) {
+  if (!Array.isArray(tools)) {
+    return [];
+  }
+
+  return tools
+    .map((tool) => {
+      if (!tool || typeof tool !== "object") {
+        return null;
+      }
+
+      if (tool.type !== "function") {
+        return null;
+      }
+
+      const fn = tool.function;
+      if (!fn?.name) {
+        return null;
+      }
+
+      const mapped = {
+        type: "function",
+        name: fn.name,
+        description: fn.description ?? "",
+        parameters: fn.parameters ?? { type: "object", properties: {} },
+      };
+
+      if (typeof fn.strict === "boolean") {
+        mapped.strict = fn.strict;
+      }
+
+      return mapped;
+    })
+    .filter(Boolean);
+}
+
+export function chatToolChoiceToResponsesToolChoice(toolChoice) {
+  if (!toolChoice) {
+    return undefined;
+  }
+
+  if (typeof toolChoice === "string") {
+    return toolChoice;
+  }
+
+  if (toolChoice?.type === "function" && toolChoice.function?.name) {
+    return {
+      type: "function",
+      name: toolChoice.function.name,
+    };
+  }
+
+  return toolChoice;
 }
 
 export function usageFromResponse(response) {
@@ -206,6 +341,31 @@ export function extractTextPartsFromItem(item) {
       return "";
     })
     .filter(Boolean);
+}
+
+export function extractFunctionCallFromItem(item) {
+  if (!item || typeof item !== "object" || item.type !== "function_call") {
+    return null;
+  }
+
+  const name = item.name ?? item.function?.name;
+  if (!name) {
+    return null;
+  }
+
+  return {
+    id: item.call_id ?? item.id ?? `call_${Date.now()}`,
+    name,
+    arguments: item.arguments ?? item.function?.arguments ?? "",
+  };
+}
+
+export function extractFunctionCallsFromResponse(response) {
+  if (!Array.isArray(response?.output)) {
+    return [];
+  }
+
+  return response.output.map(extractFunctionCallFromItem).filter(Boolean);
 }
 
 export function resolveUpstreamModel(model) {
@@ -268,7 +428,10 @@ export function buildChatCompletionResponse({
   model,
   content,
   usage,
+  toolCalls = [],
+  finishReason,
 }) {
+  const hasToolCalls = toolCalls.length > 0;
   return {
     id: responseId ?? `chatcmpl-${Date.now()}`,
     object: "chat.completion",
@@ -279,9 +442,21 @@ export function buildChatCompletionResponse({
         index: 0,
         message: {
           role: "assistant",
-          content,
+          content: hasToolCalls ? content || null : content,
+          ...(hasToolCalls
+            ? {
+                tool_calls: toolCalls.map((toolCall) => ({
+                  id: toolCall.id,
+                  type: "function",
+                  function: {
+                    name: toolCall.name,
+                    arguments: toolCall.arguments ?? "",
+                  },
+                })),
+              }
+            : {}),
         },
-        finish_reason: "stop",
+        finish_reason: finishReason ?? (hasToolCalls ? "tool_calls" : "stop"),
       },
     ],
     usage,

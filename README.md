@@ -70,17 +70,27 @@ gpt-5.4
 OPENAI_API_KEY=anything \
 LITELLM_BASE_URL=http://127.0.0.1:4200/v1 \
 LITELLM_TEST_MODEL=gpt-5.4 \
-node verify_litellm_proxy.mjs
+node test/verify_litellm_proxy.mjs
 ```
 
-当前这个本地代理先支持非流式文本对话：
+验证流式响应：
+
+```bash
+OPENAI_API_KEY=anything \
+LITELLM_BASE_URL=http://127.0.0.1:4200/v1 \
+LITELLM_TEST_MODEL=gpt-5.4 \
+LITELLM_TEST_STREAM=1 \
+node test/verify_litellm_proxy.mjs
+```
+
+当前这个本地代理支持文本对话和 OpenAI chat completions 风格的流式响应：
 
 - 支持 `GET /v1/models`
 - 支持 `POST /v1/chat/completions`
 - 支持 `GET /auth/status`
 - 支持 `POST /auth/device/start`
 - 支持 `POST /auth/device/poll`
-- 不支持 `stream=true`
+- 支持 `stream=true`
 - `chatgpt_oauth` 模式会把 `chat.completions` 请求转换成 ChatGPT Codex 后端的 `responses` 请求
 - 默认模式不再依赖 `~/.codex/auth.json`
 - `custom_responses` 兼容模式下仍支持 `CODEX_AUTH_TOKEN_FIELD` 和 `CODEX_BEARER_TOKEN`

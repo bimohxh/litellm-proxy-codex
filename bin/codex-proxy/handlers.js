@@ -2,6 +2,8 @@ import { CODEX_PROXY_MODE } from "./config.js";
 import { json, readJsonBody } from "./http.js";
 import {
   buildChatCompletionResponse,
+  chatToolChoiceToResponsesToolChoice,
+  chatToolsToResponsesTools,
   extractOutputText,
   messagesToResponsesInput,
   normalizeMessages,
@@ -73,16 +75,20 @@ export async function handleChatCompletions(req, res) {
   const upstreamBody = {
     model: upstreamModel,
     input: messagesToResponsesInput(
-      normalizedMessages.filter((message) => message.role !== "system"),
+      (body.messages ?? []).filter((message) => message?.role !== "system"),
     ),
     // system 提示在 Responses API 里应该走 instructions，而不是混到 message 列表里。
     instructions,
-    tools: [],
-    parallel_tool_calls: false,
+    tools: chatToolsToResponsesTools(body.tools),
+    parallel_tool_calls: body.parallel_tool_calls ?? false,
     store: false,
     include: ["reasoning.encrypted_content"],
     stream: true,
   };
+
+  if (body.tool_choice) {
+    upstreamBody.tool_choice = chatToolChoiceToResponsesToolChoice(body.tool_choice);
+  }
 
   if (body.stream) {
     // 下游要求流式时，直接走 SSE 转发路径。
@@ -100,6 +106,8 @@ export async function handleChatCompletions(req, res) {
       model: responseBody.model ?? upstreamModel,
       content: responseBody.content,
       usage: responseBody.usage,
+      toolCalls: responseBody.toolCalls,
+      finishReason: responseBody.finishReason,
     }),
   );
 }

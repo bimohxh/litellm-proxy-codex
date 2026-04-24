@@ -5,6 +5,9 @@ const model = process.env.LITELLM_TEST_MODEL || "codex-local";
 const prompt =
   process.env.LITELLM_TEST_PROMPT ||
   "你好啊，你是谁呢";
+const shouldStream = ["1", "true", "yes"].includes(
+  (process.env.LITELLM_TEST_STREAM || "").toLowerCase(),
+);
 
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY || "sk-5aYWXI3l7oE-qLMJqnRZLg",
@@ -12,20 +15,41 @@ const client = new OpenAI({
 });
 
 try {
-  const response = await client.chat.completions.create({
+  const request = {
     model,
     messages: [{ role: "user", content: prompt }],
-  });
+  };
 
   console.log("Request succeeded.");
   console.log(`base_url: ${baseURL}`);
   console.log(`model: ${model}`);
+  console.log(`stream: ${shouldStream}`);
   console.log("");
   console.log("Assistant response:");
-  console.log(response.choices?.[0]?.message?.content ?? "<empty>");
-  console.log("");
-  console.log("Raw response:");
-  console.log(JSON.stringify(response, null, 2));
+
+  if (shouldStream) {
+    const stream = await client.chat.completions.create({
+      ...request,
+      stream: true,
+    });
+    let content = "";
+
+    for await (const chunk of stream) {
+      const delta = chunk.choices?.[0]?.delta?.content ?? "";
+      if (delta) {
+        content += delta;
+        process.stdout.write(delta);
+      }
+    }
+
+    console.log(content ? "\n" : "<empty>");
+  } else {
+    const response = await client.chat.completions.create(request);
+    console.log(response.choices?.[0]?.message?.content ?? "<empty>");
+    console.log("");
+    console.log("Raw response:");
+    console.log(JSON.stringify(response, null, 2));
+  }
 } catch (error) {
   console.error("Request failed.");
   console.error(`base_url: ${baseURL}`);
