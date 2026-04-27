@@ -132,6 +132,9 @@ export async function handleResponses(req, res) {
   const upstreamBody = {
     ...body,
     model: upstreamModel,
+    instructions:
+      body.instructions ??
+      "You are Codex, a helpful coding assistant. Answer the user's request directly.",
     store: body.store ?? false,
     include: body.include ?? ["reasoning.encrypted_content"],
   };
