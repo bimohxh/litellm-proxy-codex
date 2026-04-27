@@ -5,7 +5,13 @@ import {
   OAUTH_ACCOUNT_DIR,
   getPort,
 } from "./config.js";
-import { handleAuthStatus, handleChatCompletions, handleDevicePoll, handleDeviceStart } from "./handlers.js";
+import {
+  handleAuthStatus,
+  handleChatCompletions,
+  handleDevicePoll,
+  handleDeviceStart,
+  handleResponses,
+} from "./handlers.js";
 import { json } from "./http.js";
 
 export function createProxyServer() {
@@ -56,8 +62,15 @@ export function createProxyServer() {
         req.method === "POST" &&
         ["/chat/completions", "/v1/chat/completions"].includes(url.pathname)
       ) {
-        // 只暴露最小必需的 OpenAI 兼容入口，避免代理表面看起来支持更多未实现接口。
         await handleChatCompletions(req, res);
+        return;
+      }
+
+      if (
+        req.method === "POST" &&
+        ["/responses", "/v1/responses"].includes(url.pathname)
+      ) {
+        await handleResponses(req, res);
         return;
       }
 

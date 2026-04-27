@@ -2,6 +2,7 @@ import { CODEX_PROXY_MODE } from "./config.js";
 import { json, readJsonBody } from "./http.js";
 import {
   buildChatCompletionResponse,
+  buildResponsesResponse,
   chatToolChoiceToResponsesToolChoice,
   chatToolsToResponsesTools,
   extractOutputText,
@@ -14,7 +15,9 @@ import { getAuthStatus, pollDeviceFlow, startDeviceFlow } from "./oauth.js";
 import {
   callChatgptCodex,
   callCustomResponsesApi,
+  callResponsesApi,
   streamChatgptCodex,
+  streamResponsesApi,
 } from "./upstream.js";
 
 export async function handleChatCompletions(req, res) {
@@ -108,6 +111,53 @@ export async function handleChatCompletions(req, res) {
       usage: responseBody.usage,
       toolCalls: responseBody.toolCalls,
       finishReason: responseBody.finishReason,
+    }),
+  );
+}
+
+export async function handleResponses(req, res) {
+  const body = await readJsonBody(req);
+
+  if (body.input == null) {
+    json(res, 400, {
+      error: {
+        message: "input is required",
+        type: "invalid_request_error",
+      },
+    });
+    return;
+  }
+
+  const upstreamModel = resolveUpstreamModel(body.model);
+  const upstreamBody = {
+    ...body,
+    model: upstreamModel,
+    store: body.store ?? false,
+    include: body.include ?? ["reasoning.encrypted_content"],
+  };
+
+  if (CODEX_PROXY_MODE === "custom_responses") {
+    const responseBody = await callCustomResponsesApi(upstreamBody);
+    json(res, 200, responseBody);
+    return;
+  }
+
+  if (body.stream) {
+    await streamResponsesApi(upstreamBody, res);
+    return;
+  }
+
+  const responseBody = await callResponsesApi(upstreamBody);
+  json(
+    res,
+    200,
+    buildResponsesResponse({
+      requestBody: body,
+      responseId: responseBody.id,
+      model: responseBody.model ?? upstreamModel,
+      content: responseBody.content,
+      usage: responseBody.usage,
+      toolCalls: responseBody.toolCalls,
     }),
   );
 }

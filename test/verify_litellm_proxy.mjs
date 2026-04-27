@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 
-const baseURL = process.env.LITELLM_BASE_URL || "http://0.0.0.0:4000";
+const baseURL = process.env.LITELLM_BASE_URL || "http://10.17.0.98:4000";
 const model = process.env.LITELLM_TEST_MODEL || "codex-local";
 const prompt =
   process.env.LITELLM_TEST_PROMPT ||
@@ -10,7 +10,7 @@ const shouldStream = ["1", "true", "yes"].includes(
 );
 
 const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY || "sk-5aYWXI3l7oE-qLMJqnRZLg",
+  apiKey: process.env.OPENAI_API_KEY || "sk-ieAnNyJSmNxh1MyrXj_OJg",
   baseURL,
 });
 

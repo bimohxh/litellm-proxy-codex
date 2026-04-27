@@ -485,6 +485,61 @@ export function buildChatCompletionChunk({
   };
 }
 
+export function buildResponsesResponse({
+  requestBody,
+  responseId,
+  model,
+  content,
+  usage,
+  toolCalls = [],
+}) {
+  const inputTokens = usage?.input_tokens ?? usage?.prompt_tokens ?? 0;
+  const outputTokens = usage?.output_tokens ?? usage?.completion_tokens ?? 0;
+  const output = [];
+
+  if (content) {
+    output.push({
+      id: `msg_${Date.now()}`,
+      type: "message",
+      status: "completed",
+      role: "assistant",
+      content: [
+        {
+          type: "output_text",
+          text: content,
+          annotations: [],
+        },
+      ],
+    });
+  }
+
+  for (const toolCall of toolCalls) {
+    output.push({
+      id: toolCall.id,
+      type: "function_call",
+      status: "completed",
+      call_id: toolCall.id,
+      name: toolCall.name,
+      arguments: toolCall.arguments ?? "",
+    });
+  }
+
+  return {
+    id: responseId ?? `resp_${Date.now()}`,
+    object: "response",
+    created_at: Math.floor(Date.now() / 1000),
+    status: "completed",
+    model: model ?? requestBody.model ?? DEFAULT_MODEL,
+    output,
+    output_text: content ?? "",
+    usage: {
+      input_tokens: inputTokens,
+      output_tokens: outputTokens,
+      total_tokens: usage?.total_tokens ?? inputTokens + outputTokens,
+    },
+  };
+}
+
 export function writeSse(res, payload) {
   res.write(`data: ${JSON.stringify(payload)}\n\n`);
 }

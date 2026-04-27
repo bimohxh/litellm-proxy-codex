@@ -652,3 +652,34 @@ export async function streamChatgptCodex(body, requestBody, res) {
 
   finishStream();
 }
+
+export async function callResponsesApi(body) {
+  return callChatgptCodex({
+    ...body,
+    stream: true,
+  });
+}
+
+export async function streamResponsesApi(body, res) {
+  const response = await fetchChatgptCodex({
+    ...body,
+    stream: true,
+  });
+
+  res.socket?.setNoDelay?.(true);
+  res.writeHead(200, {
+    "content-type": "text/event-stream; charset=utf-8",
+    "cache-control": "no-cache, no-transform",
+    connection: "keep-alive",
+    "x-accel-buffering": "no",
+  });
+  res.flushHeaders?.();
+
+  try {
+    for await (const chunk of response.body) {
+      res.write(chunk);
+    }
+  } finally {
+    res.end();
+  }
+}
