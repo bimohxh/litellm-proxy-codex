@@ -1,8 +1,8 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { pollDeviceFlow, startDeviceFlow } from "./oauth.js";
 
 const execFileAsync = promisify(execFile);
-const baseURL = process.env.CODEX_PROXY_BASE_URL ?? "http://127.0.0.1:4200";
 
 async function openBrowser(url) {
   if (process.env.CODEX_PROXY_NO_OPEN === "1") {
@@ -32,16 +32,8 @@ function sleep(ms) {
 }
 
 async function main() {
-  // 这个脚本只负责驱动浏览器登录，不直接接触 token 交换细节；
-  // 真正的 OAuth 状态保存在本地代理服务里。
-  const startResponse = await fetch(`${baseURL}/auth/device/start`, {
-    method: "POST",
-  });
-  const startData = await startResponse.json();
-
-  if (!startResponse.ok) {
-    throw new Error(startData?.error?.message || "Failed to start device flow");
-  }
+  // 直接完成 Device Code 登录并把每个账号保存成独立文件。
+  const startData = await startDeviceFlow();
 
   const opened = await openBrowser(startData.verification_uri);
 
@@ -63,16 +55,7 @@ async function main() {
   while (Date.now() < deadline) {
     await sleep(intervalMs);
 
-    const pollResponse = await fetch(`${baseURL}/auth/device/poll`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ device_code: startData.device_code }),
-    });
-    const pollData = await pollResponse.json();
-
-    if (!pollResponse.ok) {
-      throw new Error(pollData?.error?.message || "Polling failed");
-    }
+    const pollData = await pollDeviceFlow(startData.device_code);
 
     if (pollData.status === "pending") {
       process.stdout.write(".");
@@ -86,6 +69,7 @@ async function main() {
     if (pollData.status === "authorized") {
       console.log("");
       console.log(`Authorized account: ${pollData.email || pollData.account_id}`);
+      console.log(`Stored at: ${pollData.account_path}`);
       return;
     }
   }

@@ -37,7 +37,29 @@ https://auth.openai.com/codex/device
 登录成功后，代理会把 OAuth 信息保存在：
 
 ```text
-~/.codex/litellm-codex-oauth.json
+~/.codex/litellm-codex-oauth-accounts/<account_id>.json
+```
+
+每次登录的账号都会独立存储。旧版的 `~/.codex/litellm-codex-oauth.json`
+仍会被兼容读取，并在启动时自动迁移成独立账号文件。
+
+启动代理时会进入交互式向导：先用上下键从已登录账号列表里选择账号，
+再输入本次代理监听端口。端口默认是 `4200`，不同账号建议输入不同端口：
+
+```bash
+bun run start:codex-proxy
+```
+
+非交互场景下仍可以用邮箱、账号 ID 或账号 ID 前缀直接指定：
+
+```bash
+bun run start:codex-proxy -- --account user@example.com --port 4201
+```
+
+等价的环境变量写法：
+
+```bash
+CODEX_OAUTH_ACCOUNT_ID=user@example.com PORT=4201 bun run start:codex-proxy
 ```
 
 如果你仍然想走旧的“直接转发到自定义 responses 上游”模式，也保留了兼容开关：

@@ -8,6 +8,7 @@
     "test:litellm": "node test/verify_litellm_proxy.mjs"
   },
   "dependencies": {
+    "@inquirer/prompts": "^8.4.2",
     "openai": "^6.1.0"
   }
 }

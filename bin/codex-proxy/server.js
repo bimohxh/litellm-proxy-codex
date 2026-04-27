@@ -1,5 +1,10 @@
 import { createServer } from "node:http";
-import { CODEX_PROXY_MODE, DEFAULT_MODEL, OAUTH_STORE_PATH, PORT } from "./config.js";
+import {
+  CODEX_PROXY_MODE,
+  DEFAULT_MODEL,
+  OAUTH_ACCOUNT_DIR,
+  getPort,
+} from "./config.js";
 import { handleAuthStatus, handleChatCompletions, handleDevicePoll, handleDeviceStart } from "./handlers.js";
 import { json } from "./http.js";
 
@@ -71,12 +76,14 @@ export function createProxyServer() {
 
 export function startProxyServer() {
   const server = createProxyServer();
-  server.listen(PORT, "0.0.0.0", () => {
+  const port = getPort();
+  server.listen(port, "0.0.0.0", () => {
     console.log(
-      `Codex OpenAI proxy listening on http://0.0.0.0:${PORT} in ${CODEX_PROXY_MODE} mode`,
+      `Codex OpenAI proxy listening on http://0.0.0.0:${port} in ${CODEX_PROXY_MODE} mode`,
     );
     if (CODEX_PROXY_MODE === "chatgpt_oauth") {
-      console.log(`OAuth store: ${OAUTH_STORE_PATH}`);
+      console.log(`OAuth account dir: ${OAUTH_ACCOUNT_DIR}`);
+      console.log(`OAuth account file: ${process.env.CODEX_OAUTH_ACCOUNT_PATH}`);
     }
   });
   return server;

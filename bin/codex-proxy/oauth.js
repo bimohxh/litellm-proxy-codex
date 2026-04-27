@@ -8,8 +8,14 @@ import {
   OAUTH_TOKEN_URL,
   TOKEN_REFRESH_BUFFER_MS,
   CODEX_PROXY_MODE,
+  OAUTH_ACCOUNT_DIR,
 } from "./config.js";
-import { readJsonFile, writeJsonFile } from "./fs.js";
+import {
+  listOauthAccounts,
+  resolveOauthAccount,
+  saveOauthAccount,
+  updateOauthAccountRefreshToken,
+} from "./account-store.js";
 
 const pendingDeviceCodes = new Map();
 const tokenCache = new Map();
@@ -57,40 +63,19 @@ function extractIdentityFromTokens(tokens) {
   };
 }
 
-async function loadOauthStore() {
-  const store = await readJsonFile(OAUTH_STORE_PATH, {
-    version: 1,
-    default_account_id: null,
-    accounts: {},
+async function getSelectedAccount() {
+  const account = await resolveOauthAccount({
+    accountPath: process.env.CODEX_OAUTH_ACCOUNT_PATH,
+    selector: process.env.CODEX_OAUTH_ACCOUNT_ID ?? process.env.CODEX_ACCOUNT_ID,
   });
 
-  if (!store.accounts || typeof store.accounts !== "object") {
-    store.accounts = {};
-  }
-
-  return store;
-}
-
-async function saveOauthStore(store) {
-  await writeJsonFile(OAUTH_STORE_PATH, {
-    version: 1,
-    default_account_id: store.default_account_id ?? null,
-    accounts: store.accounts ?? {},
-  });
-}
-
-async function getDefaultAccount() {
-  const store = await loadOauthStore();
-  const accountId =
-    store.default_account_id ?? Object.keys(store.accounts ?? {})[0] ?? null;
-
-  if (!accountId || !store.accounts[accountId]) {
+  if (!account) {
     return null;
   }
 
   return {
-    accountId,
-    ...store.accounts[accountId],
+    accountId: account.account_id,
+    ...account,
   };
 }
 
@@ -105,15 +90,12 @@ async function addOauthAccount(tokens) {
     throw new Error("OAuth token response is missing refresh_token");
   }
 
-  const store = await loadOauthStore();
-  store.accounts[accountId] = {
+  const account = await saveOauthAccount({
     account_id: accountId,
     email,
     refresh_token: tokens.refresh_token,
     authenticated_at: Math.floor(Date.now() / 1000),
-  };
-  store.default_account_id ??= accountId;
-  await saveOauthStore(store);
+  });
 
   tokenCache.set(accountId, {
     accessToken: tokens.access_token,
@@ -121,8 +103,9 @@ async function addOauthAccount(tokens) {
   });
 
   return {
-    accountId,
-    email,
+    accountId: account.account_id,
+    email: account.email,
+    accountPath: account.account_path,
   };
 }
 
@@ -162,11 +145,11 @@ async function refreshAccessToken(refreshToken) {
 }
 
 export async function getCodexOauthAccessToken() {
-  const account = await getDefaultAccount();
+  const account = await getSelectedAccount();
 
   if (!account) {
     throw new Error(
-      "No ChatGPT OAuth account found. Run `bun run login:codex-proxy` first.",
+      "No ChatGPT OAuth account selected. Run `bun run start:codex-proxy -- --account <email|account_id>` or choose one interactively.",
     );
   }
 
@@ -181,11 +164,8 @@ export async function getCodexOauthAccessToken() {
   }
 
   const refreshed = await refreshAccessToken(account.refresh_token);
-  const store = await loadOauthStore();
-
-  if (refreshed.refresh_token && store.accounts[account.accountId]) {
-    store.accounts[account.accountId].refresh_token = refreshed.refresh_token;
-    await saveOauthStore(store);
+  if (refreshed.refresh_token) {
+    await updateOauthAccountRefreshToken(account, refreshed.refresh_token);
   }
 
   tokenCache.set(account.accountId, {
@@ -293,17 +273,22 @@ export async function pollDeviceFlow(deviceCode) {
     status: "authorized",
     account_id: account.accountId,
     email: account.email,
+    account_path: account.accountPath,
   };
 }
 
 export async function getAuthStatus() {
-  const account = await getDefaultAccount();
+  const account = await getSelectedAccount();
+  const accounts = await listOauthAccounts();
 
   return {
     mode: CODEX_PROXY_MODE,
     logged_in: Boolean(account),
     account_id: account?.accountId ?? null,
     email: account?.email ?? null,
+    account_path: account?.account_path ?? null,
+    account_count: accounts.length,
+    oauth_account_dir: OAUTH_ACCOUNT_DIR,
     oauth_store_path: OAUTH_STORE_PATH,
   };
 }
