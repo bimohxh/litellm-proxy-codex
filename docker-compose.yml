@@ -15,7 +15,7 @@ services:
       - pgdata:/var/lib/postgresql/data
 
   litellm:
-    image: ghcr.io/berriai/litellm:main-latest
+    image: ghcr.io/berriai/litellm:main-v1.83.10-stable
     container_name: litellm-proxy
     restart: always
     depends_on:
